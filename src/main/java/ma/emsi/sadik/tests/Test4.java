@@ -48,7 +48,7 @@ public class Test4 {
     private static EmbeddingStore<TextSegment> ingestDocument(String resourceName,
                                                               DocumentParser parser,
                                                               EmbeddingModel embeddingModel) throws URISyntaxException {
-        URL fileUrl = Test5.class.getResource(resourceName);
+        URL fileUrl = Test4.class.getResource(resourceName);
         Path path = Paths.get(fileUrl.toURI());
         Document document = FileSystemDocumentLoader.loadDocument(path, parser);
 
@@ -63,36 +63,6 @@ public class Test4 {
 
         System.out.println("Ingestion terminée pour : " + resourceName);
         return embeddingStore;
-    }
-
-    private static class RagQueryRouter implements QueryRouter {
-
-        private final ChatModel chatModel;
-        private final ContentRetriever contentRetriever;
-        private final PromptTemplate promptTemplate;
-
-        RagQueryRouter(ChatModel chatModel, ContentRetriever contentRetriever) {
-            this.chatModel = chatModel;
-            this.contentRetriever = contentRetriever;
-            this.promptTemplate = PromptTemplate.from(
-                    "Est-ce que la requête '{{query}}' porte sur l'IA ? Réponds seulement par 'oui', 'non', ou 'peut-être'."
-            );
-        }
-
-        @Override
-        public Collection<ContentRetriever> route(Query query) {
-            Map<String, Object> variables = new HashMap<>();
-            variables.put("query", query.text());
-            String prompt = promptTemplate.apply(variables).text();
-
-            String response = chatModel.chat(prompt);
-
-            if (response.toLowerCase().contains("non")) {
-                return Collections.emptyList();
-            } else {
-                return Collections.singletonList(contentRetriever);
-            }
-        }
     }
 
     public static void main(String[] args) throws URISyntaxException {
@@ -112,6 +82,37 @@ public class Test4 {
         EmbeddingStore<TextSegment> ragStore = ingestDocument("/rag.pdf", new ApacheTikaDocumentParser(), embeddingModel);
 
         ContentRetriever ragRetriever = EmbeddingStoreContentRetriever.from(ragStore);
+
+        // Classe interne locale, définie DANS la méthode main
+        class RagQueryRouter implements QueryRouter {
+
+            private final ChatModel chatModel;
+            private final ContentRetriever contentRetriever;
+            private final PromptTemplate promptTemplate;
+
+            RagQueryRouter(ChatModel chatModel, ContentRetriever contentRetriever) {
+                this.chatModel = chatModel;
+                this.contentRetriever = contentRetriever;
+                this.promptTemplate = PromptTemplate.from(
+                        "Est-ce que la requête '{{query}}' porte sur l'IA ? Réponds seulement par 'oui', 'non', ou 'peut-être'."
+                );
+            }
+
+            @Override
+            public Collection<ContentRetriever> route(Query query) {
+                Map<String, Object> variables = new HashMap<>();
+                variables.put("query", query.text());
+                String prompt = promptTemplate.apply(variables).text();
+
+                String response = chatModel.chat(prompt);
+
+                if (response.toLowerCase().contains("non")) {
+                    return Collections.emptyList();
+                } else {
+                    return Collections.singletonList(contentRetriever);
+                }
+            }
+        }
 
         QueryRouter customQueryRouter = new RagQueryRouter(model, ragRetriever);
 
